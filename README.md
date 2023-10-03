@@ -1,4 +1,5 @@
-# Tsetlin based language model
+# RSetlin
+Toy tsetlin machine implemented in rust, if you are looking something real please consider https://github.com/cair/tmu
 
 ## Developer setup
 
@@ -39,5 +40,3 @@ source .venv/bin/activate
 maturin develop
 ```
 repeat this step when for testing new changes to the rust code
-
-
