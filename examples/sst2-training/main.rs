@@ -36,19 +36,19 @@ fn main() -> Result<()> {
     let tokenizer = Tokenizer::from_bytes(tok_model).unwrap();
     let (idx, content, labels) = get_data()?;
     let vectors = vectorizer::vectorize(&content, &tokenizer)?;
-    println!("Vectorized");
 
-    let mut model = TsetlinMachine::new(10000, 100, 20.0, 100.0, tokenizer.get_vocab_size(true));
-    for (i, (vector, label)) in zip(vectors.iter().take(100), labels.iter().take(800)).enumerate() {
-        if i.clone() % 10 == 0 {
-            let pred = model.predict(&vector);
-            println!(
-                "At step {}, prediction is {}, which is {}",
-                i,
-                pred,
-                pred == *label
-            );
-            model.trim();
+    let mut model = TsetlinMachine::new(5000, 100, 15.0, 300.0, tokenizer.get_vocab_size(true));
+
+    let mut correct = 0;
+    for (i, (vector, label)) in zip(vectors.iter(), labels.iter()).enumerate().cycle() {
+        if (i % 5) == 0 {
+            if model.predict(&vector) == *label {
+                correct += 1;
+            }
+        }
+        if (i % 500) == 0 {
+            println!("At step {} accuracy is {}", i, correct,);
+            correct = 0;
         }
         model.fit(vector.clone(), *label);
     }
