@@ -1,4 +1,5 @@
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use std::iter::zip;
 
 #[derive(Debug)]
@@ -107,18 +108,18 @@ impl TsetlinMachine {
     fn compute_clauses(&self, input: &Vec<bool>) -> (Vec<i32>, Vec<i32>, Vec<bool>) {
         // Get the negative features as well
         let input: Vec<bool> = input
-            .iter()
+            .par_iter()
             .flat_map(|l| vec![l.clone(), (!l).clone()])
             .collect();
 
         let positive: Vec<i32> = self
             .positive_clauses
-            .iter()
+            .par_iter()
             .map(|c| c.apply(&input) as i32)
             .collect();
         let negative: Vec<i32> = self
             .negative_clauses
-            .iter()
+            .par_iter()
             .map(|c| c.apply(&input) as i32)
             .collect();
         (positive, negative, input)
@@ -159,7 +160,7 @@ impl TsetlinMachine {
         };
     }
 
-    fn trim(&mut self) {
+    pub fn trim(&mut self) {
         self.positive_clauses = self
             .positive_clauses
             .clone()

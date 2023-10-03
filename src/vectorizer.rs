@@ -1,9 +1,10 @@
 use anyhow::Result;
+use rayon::prelude::*;
 use tokenizers::tokenizer::Tokenizer;
 
 fn tokenize(chunks: &Vec<String>, tokenizer: &Tokenizer) -> Result<Vec<Vec<u32>>> {
     let tokens = chunks
-        .iter()
+        .par_iter()
         .map(|chunk| {
             tokenizer
                 .encode(chunk.as_str(), true)
@@ -15,16 +16,19 @@ fn tokenize(chunks: &Vec<String>, tokenizer: &Tokenizer) -> Result<Vec<Vec<u32>>
     Ok(tokens)
 }
 
-fn vectorize(chunks: &Vec<String>, tokenizer: &Tokenizer) -> Result<Vec<Vec<bool>>> {
+pub fn vectorize(chunks: &Vec<String>, tokenizer: &Tokenizer) -> Result<Vec<Vec<bool>>> {
     let chunks = tokenize(&chunks, &tokenizer)?;
-    let mut batch = vec![];
-    for chunk in chunks {
-        let mut vector = vec![false; tokenizer.get_vocab_size(true)];
-        for id in chunk {
-            vector[id as usize] = true;
-        }
-        batch.push(vector);
-    }
+    let size = tokenizer.get_vocab_size(true);
+    let batch = chunks
+        .par_iter()
+        .map(|chunk| {
+            let mut vector = vec![false; size];
+            for id in chunk {
+                vector[*id as usize] = true;
+            }
+            vector
+        })
+        .collect();
     Ok(batch)
 }
 
