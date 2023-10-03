@@ -9,6 +9,12 @@ enum FeedBack {
     Penalty,
 }
 
+#[derive(Debug)]
+enum FeedbackType {
+    TypeI,
+    TypeII,
+}
+
 #[derive(Clone, Default, Debug)]
 struct Automaton {
     max_activation: i32,
@@ -58,20 +64,19 @@ impl Automaton {
 
 #[derive(Clone, Default, Debug)]
 struct Clause {
+    max_activation: i32,
+    feature_count: usize,
     features: Vec<Automaton>,
     state: Vec<bool>,
 }
 
 impl Clause {
     fn new(feature_count: usize, max_activation: i32) -> Clause {
-        let mut features = Vec::new();
-        for _ in 0..feature_count * 2 {
-            features.push(Automaton::new(max_activation));
-        }
-
         let mut c = Clause {
-            features,
-            state: vec![],
+            max_activation,
+            feature_count,
+            features: vec![],
+            state: vec![false], //hack to trigger reset
         };
         c.output();
         c
@@ -79,6 +84,14 @@ impl Clause {
 
     fn output(&mut self) {
         self.state = self.features.iter().map(|f| f.output()).collect();
+        if self.state.iter().all(|x| !*x) {
+            // Reseting dead clause, not sure if totally ok as the age of the clauses will
+            // differ now.
+            self.features = (0..self.feature_count)
+                .map(|_| Automaton::new(self.max_activation))
+                .collect();
+            self.output();
+        }
     }
 
     fn apply(&self, input: &Vec<bool>) -> bool {
@@ -139,82 +152,57 @@ impl TsetlinMachine {
         positive.iter().sum::<i32>() > negative.iter().sum::<i32>()
     }
 
+    /// Give feedback to multiple clauses in parallel
+    fn feedback_clauses(
+        &mut self,
+        positive_clauses: bool,
+        results: Vec<i32>,
+        threshold: f32,
+        input: &Vec<bool>,
+        feedback_type: FeedbackType,
+    ) {
+        let clauses = match positive_clauses {
+            true => &mut self.positive_clauses,
+            false => &mut self.negative_clauses,
+        };
+
+        clauses
+            .par_iter_mut()
+            .zip(results.par_iter())
+            .for_each(|(clause, outcome)| {
+                if thread_rng().gen_range(0.0..1.0) < threshold {
+                    match &feedback_type {
+                        FeedbackType::TypeI => give_type_i_feedback(
+                            self.s.clone(),
+                            &input,
+                            *outcome == 1,
+                            &mut clause.features,
+                        ),
+                        FeedbackType::TypeII => {
+                            give_type_ii_feedback(&input, *outcome == 1, &mut clause.features)
+                        }
+                    }
+                    clause.output();
+                };
+            });
+    }
+
+    /// Fit model to single example
     pub fn fit(&mut self, input: Vec<bool>, target: bool) {
         let (positive, negative, input) = self.compute_clauses(&input);
         let v: f32 = (positive.iter().sum::<i32>() - negative.iter().sum::<i32>()) as f32;
         let threshold: f32 =
             (self.threshold - v.clamp(-self.threshold, self.threshold)) / (2f32 * self.threshold);
         if target {
-            self.positive_clauses
-                .par_iter_mut()
-                .zip(positive.par_iter())
-                .for_each(|(clause, outcome)| {
-                    if thread_rng().gen_range(0.0..1.0) < threshold {
-                        give_type_i_feedback(
-                            self.s.clone(),
-                            &input,
-                            *outcome == 1,
-                            &mut clause.features,
-                        );
-                        clause.output();
-                    };
-                });
-            self.negative_clauses
-                .par_iter_mut()
-                .zip(negative.par_iter())
-                .for_each(|(clause, outcome)| {
-                    if thread_rng().gen_range(0.0..1.0) < threshold {
-                        give_type_ii_feedback(&input, *outcome == 1, &mut clause.features);
-                        clause.output();
-                    };
-                })
+            self.feedback_clauses(true, positive, threshold, &input, FeedbackType::TypeI);
+            self.feedback_clauses(false, negative, threshold, &input, FeedbackType::TypeII);
         } else {
-            self.positive_clauses
-                .par_iter_mut()
-                .zip(positive.par_iter())
-                .for_each(|(clause, outcome)| {
-                    if thread_rng().gen_range(0.0..1.0) < threshold {
-                        give_type_ii_feedback(&input, *outcome == 1, &mut clause.features);
-                        clause.output();
-                    };
-                });
-            self.negative_clauses
-                .par_iter_mut()
-                .zip(negative.par_iter())
-                .for_each(|(clause, outcome)| {
-                    if thread_rng().gen_range(0.0..1.0) < threshold {
-                        give_type_i_feedback(
-                            self.s.clone(),
-                            &input,
-                            *outcome == 1,
-                            &mut clause.features,
-                        );
-                        clause.output();
-                    };
-                })
+            self.feedback_clauses(true, positive, threshold, &input, FeedbackType::TypeII);
+            self.feedback_clauses(false, negative, threshold, &input, FeedbackType::TypeI);
         };
     }
-
-    pub fn trim(&mut self) {
-        self.positive_clauses = self
-            .positive_clauses
-            .clone()
-            .into_iter()
-            .filter(|clause| clause.features.iter().map(|x| x.output()).any(|x| x))
-            .collect();
-        self.negative_clauses = self
-            .negative_clauses
-            .clone()
-            .into_iter()
-            .filter(|clause| clause.features.iter().map(|x| x.output()).any(|x| x))
-            .collect();
-        println!(
-            "Trimmed to {} pos and {} neg",
-            self.positive_clauses.len(),
-            self.negative_clauses.len()
-        )
-    }
 }
+
 fn give_type_i_feedback(
     s: f32,
     input: &Vec<bool>,
@@ -366,6 +354,8 @@ fn test_transition() {
 #[test]
 fn test_clause() {
     let mut c = Clause {
+        max_activation: 12,
+        feature_count: 1,
         features: vec![Automaton {
             state: 13,
             max_activation: 12,
@@ -376,6 +366,8 @@ fn test_clause() {
     assert!(c.apply(&vec![true]) == true);
 
     let mut c = Clause {
+        max_activation: 12,
+        feature_count: 2,
         features: vec![
             Automaton {
                 state: 13,
