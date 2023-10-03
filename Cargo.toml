@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "rsetlin"
-# crate-type = ["cdylib"]
+crate-type = ["cdylib"]
 
 [features]
 default = ["python"]
