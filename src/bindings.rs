@@ -10,9 +10,15 @@ struct TsetlinMachine {
 #[pymethods]
 impl TsetlinMachine {
     #[new]
-    fn new(num_clauses: i32) -> Self {
+    pub fn new(
+        feature_count: usize,
+        num_clauses: usize,
+        max_activation: i32,
+        s: f32,
+        threshold: f32,
+    ) -> Self {
         TsetlinMachine {
-            model: TM::new(50, 30, 4.0, 30.0, 3),
+            model: TM::new(num_clauses, max_activation, s, threshold, feature_count),
         }
     }
 

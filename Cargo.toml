@@ -9,8 +9,11 @@ name = "rsetlin"
 crate-type = ["cdylib"]
 
 [features]
+default = ["python"]
 python = []
 
 [dependencies]
+anyhow = "1.0.75"
 pyo3 = { version = "0.17.3", features = ["extension-module"] }
 rand = "0.8.5"
+tokenizers = { version = "0.14.0", features = ["http"] }
