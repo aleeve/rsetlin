@@ -59,6 +59,7 @@ impl Automaton {
 #[derive(Clone, Default, Debug)]
 struct Clause {
     features: Vec<Automaton>,
+    state: Vec<bool>,
 }
 
 impl Clause {
@@ -67,13 +68,21 @@ impl Clause {
         for _ in 0..feature_count * 2 {
             features.push(Automaton::new(max_activation));
         }
-        Clause { features }
+
+        let mut c = Clause {
+            features,
+            state: vec![],
+        };
+        c.output();
+        c
+    }
+
+    fn output(&mut self) {
+        self.state = self.features.iter().map(|f| f.output()).collect();
     }
 
     fn apply(&self, input: &Vec<bool>) -> bool {
-        zip(input, self.features.iter())
-            .filter(|(_, a)| a.output())
-            .all(|(l, _)| *l)
+        zip(input, &self.state).all(|(l, s)| l | !s)
     }
 }
 
@@ -136,27 +145,53 @@ impl TsetlinMachine {
         let threshold: f32 =
             (self.threshold - v.clamp(-self.threshold, self.threshold)) / (2f32 * self.threshold);
         if target {
-            for (clause, outcome) in zip(&mut self.positive_clauses, positive) {
-                if thread_rng().gen_range(0.0..1.0) < threshold {
-                    give_type_i_feedback(self.s.clone(), &input, outcome == 1, &mut clause.features)
-                };
-            }
-            for (clause, outcome) in zip(&mut self.negative_clauses, negative) {
-                if thread_rng().gen_range(0.0..1.0) < threshold {
-                    give_type_ii_feedback(&input, outcome == 1, &mut clause.features)
-                };
-            }
+            self.positive_clauses
+                .par_iter_mut()
+                .zip(positive.par_iter())
+                .for_each(|(clause, outcome)| {
+                    if thread_rng().gen_range(0.0..1.0) < threshold {
+                        give_type_i_feedback(
+                            self.s.clone(),
+                            &input,
+                            *outcome == 1,
+                            &mut clause.features,
+                        );
+                        clause.output();
+                    };
+                });
+            self.negative_clauses
+                .par_iter_mut()
+                .zip(negative.par_iter())
+                .for_each(|(clause, outcome)| {
+                    if thread_rng().gen_range(0.0..1.0) < threshold {
+                        give_type_ii_feedback(&input, *outcome == 1, &mut clause.features);
+                        clause.output();
+                    };
+                })
         } else {
-            for (clause, outcome) in zip(&mut self.positive_clauses, positive) {
-                if thread_rng().gen_range(0.0..1.0) < threshold {
-                    give_type_ii_feedback(&input, outcome == 1, &mut clause.features)
-                };
-            }
-            for (clause, outcome) in zip(&mut self.negative_clauses, negative) {
-                if thread_rng().gen_range(0.0..1.0) < threshold {
-                    give_type_i_feedback(self.s.clone(), &input, outcome == 1, &mut clause.features)
-                };
-            }
+            self.positive_clauses
+                .par_iter_mut()
+                .zip(positive.par_iter())
+                .for_each(|(clause, outcome)| {
+                    if thread_rng().gen_range(0.0..1.0) < threshold {
+                        give_type_ii_feedback(&input, *outcome == 1, &mut clause.features);
+                        clause.output();
+                    };
+                });
+            self.negative_clauses
+                .par_iter_mut()
+                .zip(negative.par_iter())
+                .for_each(|(clause, outcome)| {
+                    if thread_rng().gen_range(0.0..1.0) < threshold {
+                        give_type_i_feedback(
+                            self.s.clone(),
+                            &input,
+                            *outcome == 1,
+                            &mut clause.features,
+                        );
+                        clause.output();
+                    };
+                })
         };
     }
 
@@ -173,6 +208,11 @@ impl TsetlinMachine {
             .into_iter()
             .filter(|clause| clause.features.iter().map(|x| x.output()).any(|x| x))
             .collect();
+        println!(
+            "Trimmed to {} pos and {} neg",
+            self.positive_clauses.len(),
+            self.negative_clauses.len()
+        )
     }
 }
 fn give_type_i_feedback(
@@ -325,15 +365,17 @@ fn test_transition() {
 
 #[test]
 fn test_clause() {
-    let c = Clause {
+    let mut c = Clause {
         features: vec![Automaton {
             state: 13,
             max_activation: 12,
         }],
+        state: vec![],
     };
+    c.output();
     assert!(c.apply(&vec![true]) == true);
 
-    let c = Clause {
+    let mut c = Clause {
         features: vec![
             Automaton {
                 state: 13,
@@ -344,6 +386,8 @@ fn test_clause() {
                 max_activation: 12,
             },
         ],
+        state: vec![],
     };
+    c.output();
     assert!(c.apply(&vec![false, true]) == false);
 }
