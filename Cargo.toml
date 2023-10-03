@@ -8,6 +8,9 @@ edition = "2021"
 name = "rsetlin"
 crate-type = ["cdylib"]
 
+[features]
+python = []
+
 [dependencies]
 pyo3 = { version = "0.17.3", features = ["extension-module"] }
 rand = "0.8.5"
