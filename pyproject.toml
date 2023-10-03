@@ -4,13 +4,22 @@ build-backend = "maturin"
 
 [project]
 name = "rsetlin"
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependenvies = ["numpy"]
+dependencies = [
+  "numpy",
+  "optuna"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ipython"
+]
 
 [tool.maturin]
 python-source = "python"
