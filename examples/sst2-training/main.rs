@@ -4,7 +4,7 @@ use anyhow::Result;
 use parquet::file::reader::{FileReader, SerializedFileReader};
 use parquet::record::Row;
 use parquet::record::RowAccessor;
-use rsetlin::{tselin_machine::TsetlinMachine, vectorizer};
+use rsetlin::{tsetlin_machine::TsetlinMachine, vectorizer};
 
 use reqwest;
 use tokenizers::Tokenizer;

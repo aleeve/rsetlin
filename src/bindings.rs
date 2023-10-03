@@ -1,4 +1,4 @@
-use crate::tselin_machine::TsetlinMachine as TM;
+use crate::tsetlin_machine::TsetlinMachine as TM;
 use pyo3::prelude::*;
 
 #[pyclass]
